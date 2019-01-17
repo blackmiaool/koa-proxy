@@ -40,7 +40,7 @@ module.exports = function(options) {
       }
     }
     
-    const parsedBody = getParsedBody(ctx);
+    // const parsedBody = getParsedBody(ctx);
 
     const opt = {
       url: url + (ctx.querystring ? '?' + ctx.querystring : ''),
@@ -48,7 +48,9 @@ module.exports = function(options) {
       encoding: null,
       followRedirect: options.followRedirect !== false,
       method: ctx.method,
-      body: parsedBody,
+      resolveWithFullResponse: true,
+      simple:false,
+      // body: ctx.request.body,
     };
 
     // set 'Host' header to options.host (without protocol prefix), strip trailing slash
@@ -69,8 +71,7 @@ module.exports = function(options) {
     }
 
     // const requestThunk = request(opt);
-    console.log('opt',opt);
-
+    // console.log(111,res.statusCode);
     const res =await request(opt);
     // if (parsedBody) {
     //   var res =await request(opt);
@@ -79,7 +80,7 @@ module.exports = function(options) {
     //   // https://github.com/leukhin/co-request/issues/11
     //   var res = yield pipeRequest(this.req, requestThunk);
     // }
-
+    // console.log(res.statusCode);
     ctx.status = res.statusCode;
     for (const name in res.headers) {
       // http://stackoverflow.com/questions/35525715/http-get-parse-error-code-hpe-unexpected-content-length
@@ -122,7 +123,9 @@ function resolve(path, options) {
   } else if (typeof options.map === 'function') {
     path = options.map(path);
   }
-
+  if(!path){
+    return null;
+  }
   return options.host ? join(options.host, path) : null;
 }
 
