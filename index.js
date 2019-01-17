@@ -1,94 +1,87 @@
 'use strict';
 
-var join = require('url').resolve;
-var iconv = require('iconv-lite');
-var coRequest = require('co-request');
+const join = require('url').resolve;
+const iconv = require('iconv-lite');
+const request = require('request-promise-native');
 
 module.exports = function(options) {
   options || (options = {});
-  var request = coRequest.defaults({ jar: options.jar === true });
+  // const request = coRequest.defaults({ jar: options.jar === true });
 
   if (!(options.host || options.map || options.url)) {
     throw new Error('miss options');
   }
 
-  return function* proxy(next) {
-    let host;
-    if (options.host) {      
-      if(typeof options.host==='function'){
-        host=options.host({path:this.path});
-      }else{
-        host=options.host;
-      }    
-    }
-    var url = resolve(this.path, Object.assign({},options,{host}));
+  return async function proxy(ctx,next) {
+    const url = resolve(ctx.path, options);
 
     if(typeof options.suppressRequestHeaders === 'object'){
-      options.suppressRequestHeaders.forEach(function(h, i){
+      options.suppressRequestHeaders.forEach((h, i) => {
         options.suppressRequestHeaders[i] = h.toLowerCase();
       });
     }
 
-    var suppressResponseHeaders = [];  // We should not be overwriting the options object!
+    const suppressResponseHeaders = [];  // We should not be overwriting the options object!
     if(typeof options.suppressResponseHeaders === 'object'){
-      options.suppressResponseHeaders.forEach(function(h, i){
+      options.suppressResponseHeaders.forEach((h, i) => {
         suppressResponseHeaders.push(h.toLowerCase());
       });
     }
 
     // don't match
     if (!url) {
-      return yield* next;
+      return next();
     }
 
     // if match option supplied, restrict proxy to that match
     if (options.match) {
-      if (!this.path.match(options.match)) {
-        return yield* next;
+      if (!ctx.path.match(options.match)) {
+        return next();
       }
     }
     
-    var parsedBody = getParsedBody(this);
+    const parsedBody = getParsedBody(ctx);
 
-    var opt = {
-      url: url + (this.querystring ? '?' + this.querystring : ''),
-      headers: this.header,
+    const opt = {
+      url: url + (ctx.querystring ? '?' + ctx.querystring : ''),
+      headers: ctx.header,
       encoding: null,
-      followRedirect: options.followRedirect === false ? false : true,
-      method: this.method,
+      followRedirect: options.followRedirect !== false,
+      method: ctx.method,
       body: parsedBody,
     };
-    
+
     // set 'Host' header to options.host (without protocol prefix), strip trailing slash
-      opt.headers.host = host.slice(host.indexOf('://')+3).replace(/\/$/,'');
-    }
+    if (options.host) opt.headers.host = options.host.slice(options.host.indexOf('://')+3).replace(/\/$/,'');
 
-    if (options.requestOptions) {
-      if (typeof options.requestOptions === 'function') {
-        opt = options.requestOptions(this.request, opt);
-      } else {
-        Object.keys(options.requestOptions).forEach(function (option) { opt[option] = options.requestOptions[option]; });
-      }
-    }
+    // if (options.requestOptions) {
+    //   if (typeof options.requestOptions === 'function') {
+    //     opt = options.requestOptions(this.request, opt);
+    //   } else {
+    //     Object.keys(options.requestOptions).forEach(function (option) { opt[option] = options.requestOptions[option]; });
+    //   }
+    // }
 
-    for(name in opt.headers){
+    for(const name in opt.headers){
       if(options.suppressRequestHeaders && options.suppressRequestHeaders.indexOf(name.toLowerCase()) >= 0){
         delete opt.headers[name];
       }
     }
 
-    var requestThunk = request(opt);
+    // const requestThunk = request(opt);
+    console.log('opt',opt);
 
-    if (parsedBody) {
-      var res = yield requestThunk;
-    } else {
-      // Is there a better way?
-      // https://github.com/leukhin/co-request/issues/11
-      var res = yield pipeRequest(this.req, requestThunk);
-    }
+    const res =await request(opt);
+    // if (parsedBody) {
+    //   var res =await request(opt);
+    // } else {
+    //   // Is there a better way?
+    //   // https://github.com/leukhin/co-request/issues/11
+    //   var res = yield pipeRequest(this.req, requestThunk);
+    // }
 
-    this.status = res.statusCode;
-    for (var name in res.headers) {
+    ctx.status = res.statusCode;
+    for (const name in res.headers) {
       // http://stackoverflow.com/questions/35525715/http-get-parse-error-code-hpe-unexpected-content-length
       if(suppressResponseHeaders.indexOf(name.toLowerCase())>=0){
         continue;
@@ -96,25 +89,25 @@ module.exports = function(options) {
       if (name === 'transfer-encoding') {
         continue;
       }
-      this.set(name, res.headers[name]);
+      ctx.set(name, res.headers[name]);
     }
 
     if (options.encoding === 'gbk') {
-      this.body = iconv.decode(res.body, 'gbk');
+      ctx.body = iconv.decode(res.body, 'gbk');
       return;
     }
 
-    this.body = res.body;
+    ctx.body = res.body;
 
     if (options.yieldNext) {
-      yield next;
+      return next()
     }
   };
 };
 
 
 function resolve(path, options) {
-  var url = options.url;
+  let url = options.url;
   if (url) {
     if (!/^http/.test(url)) {
       url = options.host ? join(options.host, url) : null;
@@ -138,23 +131,23 @@ function ignoreQuery(url) {
 }
 
 function getParsedBody(ctx){
-  var body = ctx.request.body;
+  let body = ctx.request.body;
   if (body === undefined || body === null){
     return undefined;
   }
-  var contentType = ctx.request.header['content-type'];
+  const contentType = ctx.request.header['content-type'];
   if (!Buffer.isBuffer(body) && typeof body !== 'string'){
     if (contentType && contentType.indexOf('json') !== -1){
       body = JSON.stringify(body);
     } else {
-      body = body + '';
+      body += '';
     }
   }
   return body;
 }
 
-function pipeRequest(readable, requestThunk){
-  return function(cb){
-    readable.pipe(requestThunk(cb));
-  }
-}
+// function pipeRequest(readable, requestThunk){
+//   return function(cb){
+//     readable.pipe(requestThunk(cb));
+//   }
+// }
