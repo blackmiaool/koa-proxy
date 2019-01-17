@@ -13,7 +13,15 @@ module.exports = function(options) {
   }
 
   return function* proxy(next) {
-    var url = resolve(this.path, options);
+    let host;
+    if (options.host) {      
+      if(typeof options.host==='function'){
+        host=options.host({this.path});
+      }else{
+        host=options.host;
+      }    
+    }
+    var url = resolve(this.path, Object.assign({},options,{host}));
 
     if(typeof options.suppressRequestHeaders === 'object'){
       options.suppressRequestHeaders.forEach(function(h, i){
@@ -50,9 +58,10 @@ module.exports = function(options) {
       method: this.method,
       body: parsedBody,
     };
-
+    
     // set 'Host' header to options.host (without protocol prefix), strip trailing slash
-    if (options.host) opt.headers.host = options.host.slice(options.host.indexOf('://')+3).replace(/\/$/,'');
+      opt.headers.host = host.slice(host.indexOf('://')+3).replace(/\/$/,'');
+    }
 
     if (options.requestOptions) {
       if (typeof options.requestOptions === 'function') {
