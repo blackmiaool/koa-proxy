@@ -16,7 +16,7 @@ module.exports = function(options) {
     let host;
     if (options.host) {      
       if(typeof options.host==='function'){
-        host=options.host({this.path});
+        host=options.host({path:this.path});
       }else{
         host=options.host;
       }    
