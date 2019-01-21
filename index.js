@@ -1,28 +1,31 @@
-'use strict';
+"use strict";
 
-const join = require('url').resolve;
-const iconv = require('iconv-lite');
-const request = require('request-promise-native');
+const join = require("url").resolve;
+const iconv = require("iconv-lite");
+const request = require("request-promise-native");
 
 module.exports = function(options) {
   options || (options = {});
   // const request = coRequest.defaults({ jar: options.jar === true });
 
   if (!(options.host || options.map || options.url)) {
-    throw new Error('miss options');
+    throw new Error("miss options");
   }
 
-  return async function proxy(ctx,next) {
+  return async function proxy(ctx, next) {
+    // if(typeof options.host==='function'){
+    //   options.host
+    // }
     const url = resolve(ctx.path, options);
 
-    if(typeof options.suppressRequestHeaders === 'object'){
+    if (typeof options.suppressRequestHeaders === "object") {
       options.suppressRequestHeaders.forEach((h, i) => {
         options.suppressRequestHeaders[i] = h.toLowerCase();
       });
     }
 
-    const suppressResponseHeaders = [];  // We should not be overwriting the options object!
-    if(typeof options.suppressResponseHeaders === 'object'){
+    const suppressResponseHeaders = []; // We should not be overwriting the options object!
+    if (typeof options.suppressResponseHeaders === "object") {
       options.suppressResponseHeaders.forEach((h, i) => {
         suppressResponseHeaders.push(h.toLowerCase());
       });
@@ -39,22 +42,25 @@ module.exports = function(options) {
         return next();
       }
     }
-    
+
     // const parsedBody = getParsedBody(ctx);
 
     const opt = {
-      url: url + (ctx.querystring ? '?' + ctx.querystring : ''),
+      url: url + (ctx.querystring ? "?" + ctx.querystring : ""),
       headers: ctx.header,
       encoding: null,
       followRedirect: options.followRedirect !== false,
       method: ctx.method,
       resolveWithFullResponse: true,
-      simple:false,
+      simple: false
       // body: ctx.request.body,
     };
 
     // set 'Host' header to options.host (without protocol prefix), strip trailing slash
-    if (options.host) opt.headers.host = options.host.slice(options.host.indexOf('://')+3).replace(/\/$/,'');
+    if (options.host)
+      opt.headers.host = options.host
+        .slice(options.host.indexOf("://") + 3)
+        .replace(/\/$/, "");
 
     // if (options.requestOptions) {
     //   if (typeof options.requestOptions === 'function') {
@@ -64,15 +70,18 @@ module.exports = function(options) {
     //   }
     // }
 
-    for(const name in opt.headers){
-      if(options.suppressRequestHeaders && options.suppressRequestHeaders.indexOf(name.toLowerCase()) >= 0){
+    for (const name in opt.headers) {
+      if (
+        options.suppressRequestHeaders &&
+        options.suppressRequestHeaders.indexOf(name.toLowerCase()) >= 0
+      ) {
         delete opt.headers[name];
       }
     }
 
     // const requestThunk = request(opt);
     // console.log(111,res.statusCode);
-    const res =await request(opt);
+    const res = await request(opt);
     // if (parsedBody) {
     //   var res =await request(opt);
     // } else {
@@ -84,28 +93,27 @@ module.exports = function(options) {
     ctx.status = res.statusCode;
     for (const name in res.headers) {
       // http://stackoverflow.com/questions/35525715/http-get-parse-error-code-hpe-unexpected-content-length
-      if(suppressResponseHeaders.indexOf(name.toLowerCase())>=0){
+      if (suppressResponseHeaders.indexOf(name.toLowerCase()) >= 0) {
         continue;
       }
-      if (name === 'transfer-encoding') {
+      if (name === "transfer-encoding") {
         continue;
       }
       ctx.set(name, res.headers[name]);
     }
 
-    if (options.encoding === 'gbk') {
-      ctx.body = iconv.decode(res.body, 'gbk');
+    if (options.encoding === "gbk") {
+      ctx.body = iconv.decode(res.body, "gbk");
       return;
     }
 
     ctx.body = res.body;
 
     if (options.yieldNext) {
-      return next()
+      return next();
     }
   };
 };
-
 
 function resolve(path, options) {
   let url = options.url;
@@ -116,34 +124,34 @@ function resolve(path, options) {
     return ignoreQuery(url);
   }
 
-  if (typeof options.map === 'object') {
+  if (typeof options.map === "object") {
     if (options.map && options.map[path]) {
       path = ignoreQuery(options.map[path]);
     }
-  } else if (typeof options.map === 'function') {
+  } else if (typeof options.map === "function") {
     path = options.map(path);
   }
-  if(!path){
+  if (!path) {
     return null;
   }
   return options.host ? join(options.host, path) : null;
 }
 
 function ignoreQuery(url) {
-  return url ? url.split('?')[0] : null;
+  return url ? url.split("?")[0] : null;
 }
 
-function getParsedBody(ctx){
+function getParsedBody(ctx) {
   let body = ctx.request.body;
-  if (body === undefined || body === null){
+  if (body === undefined || body === null) {
     return undefined;
   }
-  const contentType = ctx.request.header['content-type'];
-  if (!Buffer.isBuffer(body) && typeof body !== 'string'){
-    if (contentType && contentType.indexOf('json') !== -1){
+  const contentType = ctx.request.header["content-type"];
+  if (!Buffer.isBuffer(body) && typeof body !== "string") {
+    if (contentType && contentType.indexOf("json") !== -1) {
       body = JSON.stringify(body);
     } else {
-      body += '';
+      body += "";
     }
   }
   return body;
